@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>School Stock Market</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://s3.tradingview.com/tv.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:20px; }
+    .hidden { display:none; }
+    .stock-card { background:#fff; padding:15px; margin:10px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+    #stockList { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:15px; }
+    button { padding:6px 12px; margin-top:5px; border:none; background:#007bff; color:#fff; border-radius:5px; cursor:pointer; }
+    button:hover { background:#0056b3; }
+    #portfolio, #adminPanel { margin-top:20px; background:#fff; padding:15px; border-radius:10px; }
+  </style>
+</head>
+<body>
+
+  <h1>📈 School Stock Market</h1>
+
+  <!-- Login -->
+  <div id="loginDiv">
+    <h3>Enter Site Password</h3>
+    <input type="password" id="sitePassword" placeholder="Password">
+    <button onclick="enterSite()">Enter</button>
+  </div>
+
+  <!-- Main App -->
+  <div id="appDiv" class="hidden">
+    <h2>Available Shares</h2>
+    <div id="stockList"></div>
+
+    <div id="chartDiv" class="hidden">
+      <h3 id="chartTitle"></h3>
+      <div id="tradingview_widget"></div>
+    </div>
+
+    <div id="portfolio">
+      <h3>📊 Portfolio</h3>
+      <p><b>Balance:</b> ₹<span id="balance">100000</span></p>
+      <div id="portfolioList"></div>
+    </div>
+
+    <div id="adminPanel">
+      <h3>⚙️ Admin Panel</h3>
+      <button onclick="resetGame()">Reset All</button>
+    </div>
+  </div>
+
+<script>
+  // ===== CONFIG =====
+  const SITE_PASSWORD = "vse2k25";
+  const FINNHUB_KEY = "d3bm7n1r01qqg7bv706gd3bm7n1r01qqg7bv7070";
+
+  // ✅ Indian Stocks
+  const SHARES = [
+    { symbolFH: "RELIANCE.NS", tv: "NSE:RELIANCE", name: "organising department" },
+    { symbolFH: "TCS.NS", tv: "NSE:TCS", name: "models department" },
+    { symbolFH: "INFY.NS", tv: "NSE:INFY", name: "tech department" },
+    { symbolFH: "HDFCBANK.NS", tv: "NSE:HDFCBANK", name: "finance department" },
+    { symbolFH: "ICICIBANK.NS", tv: "NSE:ICICIBANK", name: "games department" },
+    { symbolFH: "ITC.NS", tv: "NSE:ITC", name: "foodstalls department" },
+    { symbolFH: "SBIN.NS", tv: "NSE:SBIN", name: "stalls department" },
+    { symbolFH: "BHARTIARTL.NS", tv: "NSE:BHARTIARTL", name: "seminar department" },
+    { symbolFH: "ASIANPAINT.NS", tv: "NSE:ASIANPAINT", name: "photography department" }
+  ];
+
+  // ===== Game Data =====
+  let balance = 100000;
+  let portfolio = {};
+
+  // ===== Site Password =====
+  function enterSite() {
+    const pass = document.getElementById("sitePassword").value;
+    if (pass === SITE_PASSWORD) {
+      document.getElementById("loginDiv").classList.add("hidden");
+      document.getElementById("appDiv").classList.remove("hidden");
+      loadStocks();
+      updatePortfolio();
+    } else {
+      alert("Wrong password!");
+    }
+  }
+
+  // ===== Load Stock Cards =====
+  async function loadStocks() {
+    const container = document.getElementById("stockList");
+    container.innerHTML = "";
+    for (let stock of SHARES) {
+      const price = await fetchPrice(stock.symbolFH);
+      const card = document.createElement("div");
+      card.className = "stock-card";
+      card.innerHTML = `
+        <h4>${stock.name}</h4>
+        <p>Price: ₹${price}</p>
+        <button onclick="showChart('${stock.tv}', '${stock.name}')">View Chart</button>
+        <button onclick="buyStock('${stock.symbolFH}', ${price})">Buy</button>
+        <button onclick="sellStock('${stock.symbolFH}', ${price})">Sell</button>
+      `;
+      container.appendChild(card);
+    }
+  }
+
+  // ===== Fetch Price from Finnhub =====
+  async function fetchPrice(symbol) {
+    try {
+      const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.c || "N/A";
+    } catch {
+      return "N/A";
+    }
+  }
+
+  // ===== Show TradingView Chart =====
+  function showChart(symbol, name) {
+    document.getElementById("chartDiv").classList.remove("hidden");
+    document.getElementById("chartTitle").innerText = `${name} Chart`;
+    document.getElementById("tradingview_widget").innerHTML = "";
+
+    new TradingView.widget({
+      container_id: "tradingview_widget",
+      autosize: true,
+      symbol: symbol,
+      interval: "D",
+      theme: "light",
+      style: "1",
+      locale: "in",
+      toolbar_bg: "#f1f3f6",
+      enable_publishing: false,
+      hide_top_toolbar: false,
+      allow_symbol_change: false
+    });
+  }
+
+  // ===== Buy Stock =====
+  function buyStock(symbol, price) {
+    if (price === "N/A") { alert("Price not available!"); return; }
+    const qty = parseInt(prompt("Enter quantity to buy:"));
+    if (!qty || qty <= 0) return;
+
+    const cost = qty * price;
+    if (cost > balance) { alert("Not enough balance!"); return; }
+
+    balance -= cost;
+    if (!portfolio[symbol]) portfolio[symbol] = 0;
+    portfolio[symbol] += qty;
+
+    updatePortfolio();
+  }
+
+  // ===== Sell Stock =====
+  function sellStock(symbol, price) {
+    if (price === "N/A") { alert("Price not available!"); return; }
+    const qty = parseInt(prompt("Enter quantity to sell:"));
+    if (!qty || qty <= 0) return;
+
+    if (!portfolio[symbol] || portfolio[symbol] < qty) {
+      alert("Not enough shares to sell!");
+      return;
+    }
+
+    balance += qty * price;
+    portfolio[symbol] -= qty;
+    updatePortfolio();
+  }
+
+  // ===== Update Portfolio =====
+  function updatePortfolio() {
+    document.getElementById("balance").innerText = balance.toFixed(2);
+    const container = document.getElementById("portfolioList");
+    container.innerHTML = "";
+    for (let symbol in portfolio) {
+      if (portfolio[symbol] > 0) {
+        const item = document.createElement("p");
+        item.innerText = `${symbol} : ${portfolio[symbol]} shares`;
+        container.appendChild(item);
+      }
+    }
+  }
+
+  // ===== Admin Reset =====
+  function resetGame() {
+    if (confirm("Reset all balances and portfolio?")) {
+      balance = 100000;
+      portfolio = {};
+      updatePortfolio();
+    }
+  }
+</script>
+
+</body>
+</html>
